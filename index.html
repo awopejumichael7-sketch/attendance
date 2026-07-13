@@ -159,7 +159,9 @@
 
 <footer>POWERED BY GOOGLE APPS SCRIPT &middot; CAC GOOD WORKS ASSEMBLY ATTENDANCE SYSTEM</footer>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.js"
+  onerror="this.onerror=null; this.src='https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js';
+    document.getElementById('debug').textContent='primary CDN failed, trying backup…';"></script>
 <script>
 /* =====================================================================
    CONFIGURATION — set this to your deployed Apps Script Web App URL
@@ -198,15 +200,24 @@ async function startCamera(){
 
 function tick(){
   if (video.readyState === video.HAVE_ENOUGH_DATA && scanning && Date.now() > cooldownUntil){
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const code = jsQR(imageData.data, imageData.width, imageData.height);
     frameCount++;
-    if (debugEl) debugEl.textContent = `frames scanned: ${frameCount} | video: ${video.videoWidth}x${video.videoHeight}`;
-    if (code && code.data){
-      handleScan(code.data);
+    try {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+      if (typeof jsQR !== 'function') {
+        if (debugEl) debugEl.textContent = `frames: ${frameCount} | ERROR: jsQR library did not load (CDN blocked?)`;
+      } else {
+        const code = jsQR(imageData.data, imageData.width, imageData.height);
+        if (debugEl) debugEl.textContent = `frames scanned: ${frameCount} | video: ${video.videoWidth}x${video.videoHeight}`;
+        if (code && code.data){
+          handleScan(code.data);
+        }
+      }
+    } catch (err) {
+      if (debugEl) debugEl.textContent = `frames: ${frameCount} | ERROR: ${err.message}`;
     }
   }
   requestAnimationFrame(tick);
