@@ -155,6 +155,7 @@
   <div class="dot"></div>
   <div class="msg"><strong>Ready</strong><span>Point your camera at the QR code on your card or phone.</span></div>
 </div>
+<div id="debug" style="width:min(420px,92vw);margin-top:10px;font-family:monospace;font-size:11px;color:rgba(246,243,234,0.5);text-align:center;">frames scanned: 0</div>
 
 <footer>POWERED BY GOOGLE APPS SCRIPT &middot; CAC GOOD WORKS ASSEMBLY ATTENDANCE SYSTEM</footer>
 
@@ -174,6 +175,8 @@ const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
 let scanning = true;
 let cooldownUntil = 0;
+let frameCount = 0;
+const debugEl = document.getElementById('debug');
 
 function setStatus(type, title, text){
   statusBox.className = type; // '', 'ok', 'err'
@@ -200,6 +203,8 @@ function tick(){
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const code = jsQR(imageData.data, imageData.width, imageData.height);
+    frameCount++;
+    if (debugEl) debugEl.textContent = `frames scanned: ${frameCount} | video: ${video.videoWidth}x${video.videoHeight}`;
     if (code && code.data){
       handleScan(code.data);
     }
