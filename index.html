@@ -94,7 +94,7 @@
     font-family:'Helvetica Neue',Arial,sans-serif;
   }
   select option{color:#000;}
-  #status{
+  #status, #visitorStatus{
     width:min(420px,92vw);
     margin-top:18px;
     min-height:64px;
@@ -109,12 +109,12 @@
     background:rgba(246,243,234,0.06);
     border:1px solid var(--line);
   }
-  #status.ok{background:rgba(47,122,79,0.18);border-color:var(--good);}
-  #status.err{background:rgba(166,60,60,0.18);border-color:var(--bad);}
+  #status.ok, #visitorStatus.ok{background:rgba(47,122,79,0.18);border-color:var(--good);}
+  #status.err, #visitorStatus.err{background:rgba(166,60,60,0.18);border-color:var(--bad);}
   #status .dot{width:10px;height:10px;border-radius:50%;background:rgba(246,243,234,0.4);flex:none;}
   #status.ok .dot{background:var(--good);}
   #status.err .dot{background:var(--bad);}
-  #status .msg strong{display:block;font-size:17px;margin-bottom:2px;font-family:Georgia,serif;}
+  #status .msg strong, #visitorStatus strong{display:block;font-size:17px;margin-bottom:2px;font-family:Georgia,serif;}
   footer{
     margin-top:28px;
     font-family:'Helvetica Neue',Arial,sans-serif;
@@ -123,20 +123,47 @@
     color:rgba(246,243,234,0.4);
     text-align:center;
   }
+  .mode-toggle{
+    display:flex;gap:8px;width:min(420px,92vw);margin-bottom:14px;
+    background:rgba(246,243,234,0.06);border-radius:10px;padding:4px;
+  }
+  .mode-btn{
+    flex:1;padding:10px;border:none;border-radius:8px;background:transparent;
+    color:rgba(246,243,234,0.65);font-family:'Helvetica Neue',Arial,sans-serif;
+    font-size:13px;cursor:pointer;transition:background .15s ease,color .15s ease;
+  }
+  .mode-btn.active{background:var(--gold);color:#1a1300;font-weight:bold;}
+  .visitor-form{
+    width:min(420px,92vw);display:flex;flex-direction:column;gap:4px;
+    font-family:'Helvetica Neue',Arial,sans-serif;
+  }
+  .visitor-form label{font-size:12px;color:rgba(246,243,234,0.65);margin-top:10px;}
+  .visitor-form input[type="text"],
+  .visitor-form input[type="tel"],
+  .visitor-form input[type="email"]{
+    padding:12px 14px;border-radius:10px;border:1px solid var(--line);
+    background:rgba(246,243,234,0.08);color:var(--paper);font-size:15px;
+  }
+  .checkbox-row{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--paper);}
+  .checkbox-row input{width:16px;height:16px;}
+  .submit-btn{
+    margin-top:18px;background:var(--gold);color:#1a1300;border:none;
+    padding:14px;border-radius:10px;font-size:15px;font-weight:bold;cursor:pointer;
+  }
+  .submit-btn:active{opacity:0.85;}
 </style>
 </head>
 <body>
 
 <header>
   <div class="eyebrow">CAC Good Works Assembly</div>
-  <h1>Scan to Check In</h1>
-  <div class="sub">Hold your QR code steady inside the frame</div>
+  <h1 id="pageTitle">Scan to Check In</h1>
+  <div class="sub" id="pageSub">Hold your QR code steady inside the frame</div>
 </header>
 
-<div id="reader-wrap">
-  <video id="preview" playsinline muted></video>
-  <div class="frame"></div>
-  <div class="scan-line"></div>
+<div class="mode-toggle">
+  <button class="mode-btn active" id="memberModeBtn" onclick="setMode('member')">Member</button>
+  <button class="mode-btn" id="visitorModeBtn" onclick="setMode('visitor')">Visitor / First Timer</button>
 </div>
 
 <div class="service-picker">
@@ -151,11 +178,44 @@
   </select>
 </div>
 
-<div id="status">
-  <div class="dot"></div>
-  <div class="msg"><strong>Ready</strong><span>Point your camera at the QR code on your card or phone.</span></div>
+<div id="memberMode">
+  <div id="reader-wrap">
+    <video id="preview" playsinline muted></video>
+    <div class="frame"></div>
+    <div class="scan-line"></div>
+  </div>
+
+  <div id="status">
+    <div class="dot"></div>
+    <div class="msg"><strong>Ready</strong><span>Point your camera at the QR code on your card or phone.</span></div>
+  </div>
+  <div id="debug" style="width:min(420px,92vw);margin-top:10px;font-family:monospace;font-size:11px;color:rgba(246,243,234,0.5);text-align:center;">frames scanned: 0</div>
 </div>
-<div id="debug" style="width:min(420px,92vw);margin-top:10px;font-family:monospace;font-size:11px;color:rgba(246,243,234,0.5);text-align:center;">frames scanned: 0</div>
+
+<div id="visitorMode" style="display:none;">
+  <div class="visitor-form">
+    <label>Full name</label>
+    <input type="text" id="visitorName" placeholder="Your full name">
+
+    <label>Phone number</label>
+    <input type="tel" id="visitorPhone" placeholder="e.g. 0801 234 5678">
+
+    <label>Email (optional)</label>
+    <input type="email" id="visitorEmail" placeholder="you@example.com">
+
+    <label class="checkbox-row">
+      <input type="checkbox" id="visitorFirstTime" checked>
+      This is my first time visiting
+    </label>
+
+    <label>Who invited you? (optional)</label>
+    <input type="text" id="visitorInvitedBy" placeholder="Name of member who invited you">
+
+    <button class="submit-btn" onclick="submitVisitor()">Register My Visit</button>
+  </div>
+  <div id="visitorStatus" style="display:none;"></div>
+</div>
+
 
 <footer>POWERED BY GOOGLE APPS SCRIPT &middot; CAC GOOD WORKS ASSEMBLY ATTENDANCE SYSTEM</footer>
 
@@ -10269,7 +10329,7 @@ function findAlignmentPattern(matrix, alignmentPatternQuads, topRight, topLeft, 
    CONFIGURATION — set this to your deployed Apps Script Web App URL
    (Deploy > New deployment > Web app in the Apps Script editor).
    ===================================================================== */
-const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwnYE4mGKBnW-nGDXV4VBKJsDW5qGZP-ceJF4JMtiCwCsZsWDilejBItk6HvgqMWOyl/exec';
+const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxl3JEVSfHQC4DM6Vo6141Mkkr2Ugfg83zOCpeQORU/dev';
 
 const video = document.getElementById('preview');
 const statusBox = document.getElementById('status');
@@ -10358,6 +10418,66 @@ async function handleScan(rawPayload){
     scanning = true;
     setStatus('', 'Ready', 'Point your camera at the QR code on your card or phone.');
   }, 4000);
+}
+
+function setMode(mode) {
+  const isMember = mode === 'member';
+  document.getElementById('memberMode').style.display = isMember ? 'block' : 'none';
+  document.getElementById('visitorMode').style.display = isMember ? 'none' : 'block';
+  document.getElementById('memberModeBtn').classList.toggle('active', isMember);
+  document.getElementById('visitorModeBtn').classList.toggle('active', !isMember);
+  document.getElementById('pageTitle').textContent = isMember ? 'Scan to Check In' : 'Welcome, Guest!';
+  document.getElementById('pageSub').textContent = isMember
+    ? 'Hold your QR code steady inside the frame'
+    : "We're glad you're here — tell us a bit about yourself";
+  scanning = isMember; // pause the camera loop's handling while in visitor mode
+}
+
+async function submitVisitor() {
+  const fullName = document.getElementById('visitorName').value.trim();
+  const phoneNumber = document.getElementById('visitorPhone').value.trim();
+  const email = document.getElementById('visitorEmail').value.trim();
+  const isFirstTime = document.getElementById('visitorFirstTime').checked;
+  const invitedBy = document.getElementById('visitorInvitedBy').value.trim();
+  const serviceType = document.getElementById('serviceSelect').value;
+  const statusEl = document.getElementById('visitorStatus');
+
+  if (!fullName) {
+    statusEl.style.display = 'block';
+    statusEl.className = 'err';
+    statusEl.innerHTML = '<strong>Name required</strong><span>Please enter your full name.</span>';
+    return;
+  }
+
+  statusEl.style.display = 'block';
+  statusEl.className = '';
+  statusEl.innerHTML = '<strong>Submitting…</strong>';
+
+  try {
+    const res = await fetch(WEB_APP_URL, {
+      method: 'POST',
+      body: JSON.stringify({
+        action: 'registerVisitor',
+        fullName, phoneNumber, email, isFirstTime, invitedBy, serviceType
+      })
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      statusEl.className = 'ok';
+      statusEl.innerHTML = '<strong>Welcome!</strong><span>Thanks for letting us know you\'re here today.</span>';
+      document.getElementById('visitorName').value = '';
+      document.getElementById('visitorPhone').value = '';
+      document.getElementById('visitorEmail').value = '';
+      document.getElementById('visitorInvitedBy').value = '';
+    } else {
+      statusEl.className = 'err';
+      statusEl.innerHTML = `<strong>Not recorded</strong><span>${data.reason || 'Please see an usher for help.'}</span>`;
+    }
+  } catch (err) {
+    statusEl.className = 'err';
+    statusEl.innerHTML = '<strong>Connection problem</strong><span>Could not reach the server. Please see an usher.</span>';
+  }
 }
 
 startCamera();
