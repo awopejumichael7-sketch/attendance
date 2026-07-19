@@ -94,7 +94,7 @@
     font-family:'Helvetica Neue',Arial,sans-serif;
   }
   select option{color:#000;}
-  #status, #visitorStatus{
+  #status, #visitorStatus, #prayerStatus{
     width:min(420px,92vw);
     margin-top:18px;
     min-height:64px;
@@ -109,12 +109,12 @@
     background:rgba(246,243,234,0.06);
     border:1px solid var(--line);
   }
-  #status.ok, #visitorStatus.ok{background:rgba(47,122,79,0.18);border-color:var(--good);}
-  #status.err, #visitorStatus.err{background:rgba(166,60,60,0.18);border-color:var(--bad);}
+  #status.ok, #visitorStatus.ok, #prayerStatus.ok{background:rgba(47,122,79,0.18);border-color:var(--good);}
+  #status.err, #visitorStatus.err, #prayerStatus.err{background:rgba(166,60,60,0.18);border-color:var(--bad);}
   #status .dot{width:10px;height:10px;border-radius:50%;background:rgba(246,243,234,0.4);flex:none;}
   #status.ok .dot{background:var(--good);}
   #status.err .dot{background:var(--bad);}
-  #status .msg strong, #visitorStatus strong{display:block;font-size:17px;margin-bottom:2px;font-family:Georgia,serif;}
+  #status .msg strong, #visitorStatus strong, #prayerStatus strong{display:block;font-size:17px;margin-bottom:2px;font-family:Georgia,serif;}
   footer{
     margin-top:28px;
     font-family:'Helvetica Neue',Arial,sans-serif;
@@ -164,6 +164,7 @@
 <div class="mode-toggle">
   <button class="mode-btn active" id="memberModeBtn" onclick="setMode('member')">Member</button>
   <button class="mode-btn" id="visitorModeBtn" onclick="setMode('visitor')">Visitor / First Timer</button>
+  <button class="mode-btn" id="prayerModeBtn" onclick="setMode('prayer')">Prayer Request</button>
 </div>
 
 <div class="service-picker">
@@ -172,8 +173,8 @@
     <option value="Sunday Service">Sunday Service</option>
     <option value="Bible Study">Bible Study</option>
     <option value="Prayer Meeting">Prayer Meeting</option>
-    <option value="Workers' Meeting">Workers' Meeting</option>
-    <option value="Youth Service">Youth Service</option>
+    <option value="Workers' Meeting">E.A.R</option>
+    <option value="Youth Service">Camp Meeting</option>
     <option value="Special Program">Special Program</option>
   </select>
 </div>
@@ -217,6 +218,32 @@
     <button class="submit-btn" onclick="submitVisitor()">Register My Visit</button>
   </div>
   <div id="visitorStatus" style="display:none;"></div>
+</div>
+
+<div id="prayerMode" style="display:none;">
+  <div class="visitor-form">
+    <label>Your name (optional — leave blank to stay anonymous)</label>
+    <input type="text" id="prayerName" placeholder="Your name">
+
+    <label>Phone number (optional)</label>
+    <input type="tel" id="prayerPhone" placeholder="e.g. 0801 234 5678">
+
+    <label>Category</label>
+    <select id="prayerCategory">
+      <option value="General">General</option>
+      <option value="Health">Health</option>
+      <option value="Family">Family</option>
+      <option value="Finances">Finances</option>
+      <option value="Spiritual Growth">Spiritual Growth</option>
+      <option value="Other">Other</option>
+    </select>
+
+    <label>What would you like prayer for?</label>
+    <textarea id="prayerPoint" placeholder="Share as much or as little as you're comfortable with" rows="4" style="padding:12px 14px;border-radius:10px;border:1px solid var(--line);background:rgba(246,243,234,0.08);color:var(--paper);font-size:15px;font-family:inherit;resize:vertical;"></textarea>
+
+    <button class="submit-btn" onclick="submitPrayer()">Submit Prayer Request</button>
+  </div>
+  <div id="prayerStatus" style="display:none;"></div>
 </div>
 
 
@@ -10425,15 +10452,26 @@ async function handleScan(rawPayload){
 
 function setMode(mode) {
   const isMember = mode === 'member';
+  const isVisitor = mode === 'visitor';
+  const isPrayer = mode === 'prayer';
+
   document.getElementById('memberMode').style.display = isMember ? 'block' : 'none';
-  document.getElementById('visitorMode').style.display = isMember ? 'none' : 'block';
+  document.getElementById('visitorMode').style.display = isVisitor ? 'block' : 'none';
+  document.getElementById('prayerMode').style.display = isPrayer ? 'block' : 'none';
+
   document.getElementById('memberModeBtn').classList.toggle('active', isMember);
-  document.getElementById('visitorModeBtn').classList.toggle('active', !isMember);
-  document.getElementById('pageTitle').textContent = isMember ? 'Scan to Check In' : 'Welcome, Guest!';
-  document.getElementById('pageSub').textContent = isMember
-    ? 'Hold your QR code steady inside the frame'
-    : "We're glad you're here — tell us a bit about yourself";
-  scanning = isMember; // pause the camera loop's handling while in visitor mode
+  document.getElementById('visitorModeBtn').classList.toggle('active', isVisitor);
+  document.getElementById('prayerModeBtn').classList.toggle('active', isPrayer);
+
+  const titles = {
+    member: ['Scan to Check In', 'Hold your QR code steady inside the frame'],
+    visitor: ['Welcome, Guest!', "We're glad you're here — tell us a bit about yourself"],
+    prayer: ['We\'d Love to Pray With You', 'Share what\'s on your heart — as much or as little as you like']
+  };
+  document.getElementById('pageTitle').textContent = titles[mode][0];
+  document.getElementById('pageSub').textContent = titles[mode][1];
+
+  scanning = isMember; // pause the camera loop's handling while in visitor/prayer mode
 }
 
 async function submitVisitor() {
@@ -10486,6 +10524,47 @@ async function submitVisitor() {
 }
 
 startCamera();
+
+async function submitPrayer() {
+  const name = document.getElementById('prayerName').value.trim();
+  const phoneNumber = document.getElementById('prayerPhone').value.trim();
+  const category = document.getElementById('prayerCategory').value;
+  const prayerPoint = document.getElementById('prayerPoint').value.trim();
+  const statusEl = document.getElementById('prayerStatus');
+
+  if (!prayerPoint) {
+    statusEl.style.display = 'block';
+    statusEl.className = 'err';
+    statusEl.innerHTML = '<strong>Please share your request</strong><span>Let us know what you\'d like prayer for.</span>';
+    return;
+  }
+
+  statusEl.style.display = 'block';
+  statusEl.className = '';
+  statusEl.innerHTML = '<strong>Submitting…</strong>';
+
+  try {
+    const res = await fetch(WEB_APP_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'submitPrayerRequest', name, phoneNumber, category, prayerPoint })
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      statusEl.className = 'ok';
+      statusEl.innerHTML = '<strong>🙏 Received</strong><span>Our prayer team will be lifting you up.</span>';
+      document.getElementById('prayerName').value = '';
+      document.getElementById('prayerPhone').value = '';
+      document.getElementById('prayerPoint').value = '';
+    } else {
+      statusEl.className = 'err';
+      statusEl.innerHTML = `<strong>Not recorded</strong><span>${data.reason || 'Please see an usher for help.'}</span>`;
+    }
+  } catch (err) {
+    statusEl.className = 'err';
+    statusEl.innerHTML = '<strong>Connection problem</strong><span>Could not reach the server. Please see an usher.</span>';
+  }
+}
 </script>
 </body>
 </html>
