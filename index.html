@@ -10374,7 +10374,7 @@ function findAlignmentPattern(matrix, alignmentPatternQuads, topRight, topLeft, 
    CONFIGURATION — set this to your deployed Apps Script Web App URL
    (Deploy > New deployment > Web app in the Apps Script editor).
    ===================================================================== */
-const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwnYE4mGKBnW-nGDXV4VBKJsDW5qGZP-ceJF4JMtiCwCsZsWDilejBItk6HvgqMWOyl/exec';
+const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxl3JEVSfHQC4DM6Vo6141Mkkr2Ugfg83zOCpeQORU/dev';
 
 const video = document.getElementById('preview');
 const statusBox = document.getElementById('status');
@@ -10538,7 +10538,55 @@ async function submitVisitor() {
   }
 }
 
-startCamera();
+/**
+ * NEW, ADDITIVE — self-service wall QR code support. When this page is
+ * opened via the special wall QR code's link (which ends in
+ * "?mode=self"), it skips requesting camera access entirely and opens
+ * straight to the phone-number check-in panel, since a member scanning
+ * a single shared wall code with their OWN phone has no second device
+ * to scan their personal QR code with.
+ *
+ * This is fully gated behind that one URL parameter — any tablet or
+ * device opening the page WITHOUT "?mode=self" in the link (i.e. every
+ * kiosk/usher device using the original setup) behaves EXACTLY as
+ * before: camera starts immediately, QR scanning is the default. This
+ * block changes nothing about that existing path.
+ *
+ * GPS PROXIMITY: since self check-in has no usher present to confirm
+ * someone is actually at the building, this mode also requests the
+ * browser's location ONCE, up front, and attaches it to the check-in
+ * request — the server then verifies it's within CHURCH_CHECKIN_RADIUS_METERS
+ * of the church (see isWithinChurchProximity in Triggers_And_WebApp.gs).
+ * selfCheckinCoords stays null for every other page mode, so
+ * submitPhoneCheckIn()'s payload for the existing usher-operated kiosk
+ * phone panel is completely unchanged — see that function below.
+ */
+let selfCheckinCoords = null;
+
+const urlParams = new URLSearchParams(window.location.search);
+if (urlParams.get('mode') === 'self') {
+  document.getElementById('reader-wrap').style.display = 'none';
+  document.getElementById('debug').style.display = 'none';
+  document.getElementById('phoneToggleBtn').style.display = 'none';
+  document.getElementById('pageSub').textContent = 'Enter your phone number below to check yourself in';
+  togglePhoneCheckIn(); // opens the phone panel — it starts closed by default, so this single call opens it
+
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        selfCheckinCoords = { latitude: position.coords.latitude, longitude: position.coords.longitude };
+      },
+      () => {
+        // Permission denied or unavailable — selfCheckinCoords stays null.
+        // submitPhoneCheckIn() below already handles this case by
+        // requiring location before allowing a self check-in to proceed.
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  }
+} else {
+  startCamera();
+}
 
 async function submitPrayer() {
   const name = document.getElementById('prayerName').value.trim();
@@ -10612,19 +10660,43 @@ async function submitPhoneCheckIn() {
     return;
   }
 
+  // NEW, ADDITIVE — self-checkin mode requires a successful location read
+  // before allowing submission. Without this, someone could simply deny
+  // the location permission prompt and bypass the proximity check
+  // entirely, since the server only verifies location when it's actually
+  // present in the request. This guard only ever fires when
+  // urlParams.get('mode') === 'self' — the existing usher-operated kiosk
+  // phone panel never sets that parameter, so it is completely unaffected.
+  if (urlParams.get('mode') === 'self' && !selfCheckinCoords) {
+    statusEl.style.display = 'block';
+    statusEl.className = 'err';
+    statusEl.innerHTML = '<strong>Location required</strong><span>Please allow location access to check in from here, or see an usher.</span>';
+    return;
+  }
+
   statusEl.style.display = 'block';
   statusEl.className = '';
   statusEl.innerHTML = '<strong>Checking…</strong>';
 
   try {
+    const payload = {
+      action: 'checkin',
+      phoneNumber: phoneNumber,
+      serviceType: serviceType,
+      device: navigator.userAgent
+    };
+    // NEW, ADDITIVE — only attached when selfCheckinCoords was actually
+    // set (self-checkin mode with a successful location read). For the
+    // existing kiosk phone panel, selfCheckinCoords is always null, so
+    // this payload is byte-for-byte identical to before.
+    if (selfCheckinCoords) {
+      payload.latitude = selfCheckinCoords.latitude;
+      payload.longitude = selfCheckinCoords.longitude;
+    }
+
     const res = await fetch(WEB_APP_URL, {
       method: 'POST',
-      body: JSON.stringify({
-        action: 'checkin',
-        phoneNumber: phoneNumber,
-        serviceType: serviceType,
-        device: navigator.userAgent
-      })
+      body: JSON.stringify(payload)
     });
     const data = await res.json();
 
